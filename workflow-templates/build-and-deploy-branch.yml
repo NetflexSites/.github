@@ -27,7 +27,7 @@ jobs:
         OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
     - name: Extract branch name
       shell: bash
-      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+      run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/})"
       id: branch
     - uses: actions/setup-node@v2
       name: Setup Node
@@ -66,7 +66,7 @@ jobs:
         curl -H "Authorization:Bearer $OIDC_TOKEN" -H "Accepts:application/github-output" -H 'Content-Type: application/json' --data "{\"template\":\"$TEMPLATE\", \"env\":$ENV_VARIABLES}" https://orc.apility.dev/deploy/create?env=$NF_ENV
       env:
         OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
-        NF_ENV: ${{ steps.info.outputs.siteAlias }}-${{ steps.branch.outputs.name }}
+        NF_ENV: ${{ steps.info.outputs.siteAlias }}-${{ steps.branch.outputs.branch }}
         TEMPLATE: php-74
         ENV_VARIABLES: '{"APP_ENV": "production", "APP_DEBUG": "flase"}'
     - name: Zip
@@ -82,7 +82,7 @@ jobs:
         curl --fail -H "Authorization:Bearer $OIDC_TOKEN" -H "Accepts:application/github-output" https://orc.apility.dev/deploy?env=$NF_ENV
       env:
         OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
-        NF_ENV: ${{ steps.info.outputs.siteAlias }}-${{ steps.branch.outputs.name }}
+        NF_ENV: ${{ steps.info.outputs.siteAlias }}-${{ steps.branch.outputs.branch }}
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
