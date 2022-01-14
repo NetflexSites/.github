@@ -1,0 +1,90 @@
+name: "Build and deploy branch"
+on:
+  push:
+    branches:
+      - $default-branch
+
+jobs:
+  build:
+    name: "Build"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@master
+    - name: Create token
+      id: oidc
+      run: |
+        TOKEN=$(curl -sLS "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=orc.apility.dev" -H "User-Agent: actions/oidc-client" -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+        echo "$TOKEN"
+        echo "::set-output name=token::$(echo $TOKEN | jq -r .value)"
+    - name: Get site info
+      id: info
+      run: |
+        curl -H "Authorization:Bearer $OIDC_TOKEN" -H "Accepts:application/github-output" https://orc.apility.dev/info
+      env:
+        OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+    - name: Extract branch name
+      shell: bash
+      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+      id: branch
+    - uses: actions/setup-node@v2
+      name: Setup Node
+      with:
+        node-version: '14'
+    - uses: shivammathur/setup-php@v2
+      name: Setup PHP
+      with:
+        php-version: '7.4'
+    - uses: ramsey/composer-install@v2
+      with:
+        composer-options: "--ignore-platform-reqs --optimize-autoloader"
+      env:
+        NETFLEX_PUBLIC_KEY: ${{ steps.info.outputs.publicKey }}
+        NETFLEX_PRIVATE_KEY: ${{ steps.info.outputs.privateKey }}
+    - name: Set FontAwesome Token
+      if: steps.info.outputs.fontAwesomeToken
+      run: |
+        npm config set "@fortawesome:registry" https://npm.fontawesome.com/
+        npm config set "//npm.fontawesome.com/:_authToken" $TOKEN
+      env:
+        TOKEN: ${{ steps.info.outputs.fontAwesomeToken }}
+    - name: Build javascript
+      run: |
+        NODE_ENV=production
+        echo "::group::Yarn"
+        yarn
+        echo "::endgroup::"
+        echo "::group::yarn build"
+        yarn build
+        echo "::endgroup::"
+        rm -rf node_modules
+    - name: Create environment
+      id: create-env
+      run: |
+        curl -H "Authorization:Bearer $OIDC_TOKEN" -H "Accepts:application/github-output" -H 'Content-Type: application/json' --data "{\"template\":\"$TEMPLATE\", \"env\":$ENV_VARIABLES}" https://orc.apility.dev/deploy/create?env=$NF_ENV
+      env:
+        OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        NF_ENV: ${{ steps.info.outputs.siteAlias }}-${{ steps.branch.outputs.name }}
+        TEMPLATE: php-74
+        ENV_VARIABLES: '{"APP_ENV": "production", "APP_DEBUG": "flase"}'
+    - name: Zip
+      run: |
+        zip -r /tmp/code.zip ./*
+    - name: Upload to S3
+      run: |
+        curl --fail -F code=@/tmp/code.zip -i -s -H "Authorization:Bearer $OIDC_TOKEN" https://orc.apility.dev/upload
+      env:
+        OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+    - name: Deploy new version
+      run: |
+        curl --fail -H "Authorization:Bearer $OIDC_TOKEN" -H "Accepts:application/github-output" https://orc.apility.dev/deploy?env=$NF_ENV
+      env:
+        OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        NF_ENV: ${{ steps.info.outputs.siteAlias }}-${{ steps.branch.outputs.name }}
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: code.zip
+        path: /tmp/code.zip
