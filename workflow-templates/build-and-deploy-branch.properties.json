@@ -2,7 +2,9 @@
     "name": "Build and Deploy branch",
     "description": "Deploy and build branches on kubernetes",
     "categories": [
-        "PHP"
+        "PHP",
+        "php",
+        "Blade"
     ],
    "filePatterns": [
         "package.json$",
