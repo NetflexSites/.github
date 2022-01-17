@@ -3,5 +3,10 @@
     "description": "Deploy and build branches on kubernetes",
     "categories": [
         "PHP"
+    ],
+   "filePatterns": [
+        "package.json$",
+        ".*\\.md$",
+        "server.php$"
     ]
 }
